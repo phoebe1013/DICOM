@@ -144,11 +144,10 @@ def m2d(file, empty_dcm, dcm_folder):
     mgz = nib.load(file)
     factor_x, factor_y, factor_z = mgz.shape
     datas = mgz.get_data()
-    subs = np.vsplit(datas, factor_x)
     fileNames = ["IMG%04d.dcm" %x for x in range(1, factor_x+1)]
 
     for i in range(factor_x):
-        pixel_array = np.reshape(subs[i], (factor_y, factor_z))
+        pixel_array = np.transpose(datas[:, :, i])  # axis = 2
         pixels = pixel_array.astype("int16")
         ds = pydicom.dcmread(empty_dcm)
         pixels = pixels.tobytes()
