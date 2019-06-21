@@ -1,4 +1,5 @@
 import pydicom
+from pydicom.dataset import Dataset, FileDataset
 import glob
 import os
 import numpy as np
@@ -25,7 +26,6 @@ def sortDCM(dcm_files):
     return dcm_files
 
 
-
 def ReadData(dcm_folder):
     """
     Read all pixel data of dicom slices from a folder.
@@ -44,17 +44,17 @@ def ReadData(dcm_folder):
 
 
 
-#
-def d2n(dcm_folder, sliceNum, nifti, meta_folder):
+
+def d2n_lossless(dcm_folder, nifti, meta_folder):
     """
     Convert dicom files to nifti format, and empty pixel data of dicom slices.
     @:param dcm_folder: dicom folder name
-    @:param sliceNum: the number of slices in folder
     @:param nifti: nifti name
     @:param meta_folder: the meta data folder name
     @:return 3-D array pixel data (number, resolution, resolution)
     """
     dcm_files = sorted(glob.glob(os.path.join(dcm_folder, "*.dcm")))
+    sliceNum = len(dcm_files)
     for(i, file) in enumerate(dcm_files):
         fileName = os.path.split(file)[1]
         if not os.path.exists(meta_folder):
@@ -80,18 +80,16 @@ def d2n(dcm_folder, sliceNum, nifti, meta_folder):
 
 
 
-def n2d(nifti, slicesNum, empty_dcm, dcm_folder):
+def n2d_lossless(nifti, empty_dcm, dcm_folder):
     """
     Convert nifti file to dicom files. Read nifti pixel data and write it to empty dicom slices.
     @:param nifti: nifti file name
-    @:param sliceNum: the number of slices in folder
     @:param empty_dcm: the meta data folder
     @:param dcm_folder: dicom slices folder
     """
     files = sorted(glob.glob(os.path.join(empty_dcm, "*.dcm")))
     img = nib.load(nifti)
     datas = img.get_data()
-    subs = np.vsplit(datas, slicesNum)
     dcm_files = sortDCM(files)
 
     for (i, file) in enumerate(dcm_files):
@@ -101,7 +99,7 @@ def n2d(nifti, slicesNum, empty_dcm, dcm_folder):
         resolution = 512                        # Assume the dicom slices are 512 X 512
         fileName = os.path.split(file)[1]
         output = os.path.join(dcm_folder, fileName)
-        slice = subs[i]
+        slice = datas[i, :, :]                  # vsplit, axis = 0
         pixel_array = np.reshape(slice, (resolution, resolution))
 
         ds = pydicom.dcmread(file)              # Write pixel data to dicom
@@ -134,7 +132,7 @@ def Edm(input, empty_Name):
 
 
 
-def m2d(file, empty_dcm, dcm_folder):
+def m2d_lossless(file, empty_dcm, dcm_folder):
     """
     Read pixel data of the mgz file then write it to empty dicom file from Edm.
     @:param file: mgz file name
@@ -164,22 +162,89 @@ def m2d(file, empty_dcm, dcm_folder):
 
 
 
+
+def newDCM():
+    """
+    Create a new dicom file as template for m2d.
+    This dicom file has no pixel data. Pixel data will be filled in m2d method.
+    @:return dataset of dicom file, which could be filled pixel data from mgz file
+    """
+    fileName = "template0529.dcm"
+
+    file_meta = Dataset()
+    file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.2'
+    file_meta.MediaStorageSOPInstanceUID = "1.2.3"
+    file_meta.ImplementationClassUID = "1.2.3.4"
+
+    ds = FileDataset(fileName, {},
+                     file_meta=file_meta, preamble=b"\0" * 128)
+
+    ds.PatientName = "BirmingHamUAB"
+    ds.PatientID = "123456789"
+
+    # Set the transfer syntax
+    ds.is_little_endian = True
+    ds.is_implicit_VR = True
+
+    ds.PixelData = bytes(0)
+
+    ds.Rows = 256
+    ds.Columns = 256
+    ds.SamplesPerPixel = 1
+    ds.PhotometricInterpretation = "MONOCHROME2"
+    ds.PixelSpacing = [1, 1]
+    ds.BitsAllocated = 16
+    ds.BitsStored = 16
+    ds.HighBit = 15
+    ds.PixelRepresentation = 1
+
+    ds.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+
+    return ds
+
+
+
+
+
+
+def m2d(mgz, dcm_folder):
+    mgzData = nib.load(mgz)
+    factor_x, factor_y, factor_z = mgzData.shape
+    datas = mgzData.get_data()
+    fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
+
+    for i in range(factor_x):
+        pixel_array = np.transpose(datas[:, :, i])  # axis = 2
+        pixels = pixel_array.astype("int16")
+        ds = newDCM()
+        ds.PixelData = pixels.tobytes()
+        name = fileNames[i]
+        if not os.path.exists(dcm_folder):
+            os.makedirs(dcm_folder)
+        path = os.path.join(dcm_folder, name)
+        ds.save_as(path)
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
-    command = str(input("==> Enter: d2n, n2d, edm, m2d or exit? "))
+    command = str(input("==> Enter: d2n, n2d, edm, m2d_lossless, m2d or exit? "))
     while(command != "exit"):
         if(command == "d2n"):
             dcm_folder = str(input("=> Enter DICOM Folder Name <input>: "))
-            sliceNum = int(input("=> Enter slices number of DCM: "))
             nifit = str(input("=> Enter Nifti Name <output> (example.nii): "))
             meta = str(input("=> Enter Meta Folder Name <output>: "))
-            d2n(dcm_folder, sliceNum,  nifit, meta)
+            d2n_lossless(dcm_folder, nifit, meta)
 
         elif(command == "n2d"):
             nifit = str(input("=> Enter Nifti Name <input> (example.nii): "))
-            sliceNum = int(input("=> Enter Slices Number of DCM: "))
             meta = str(input("=> Enter Meta Folder Name <input>: "))
             dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
-            n2d(nifit, sliceNum, meta, dcm_folder)
+            n2d_lossless(nifit, meta, dcm_folder)
 
         elif(command == "edm"):
             file = str(input("=> Enter file/folder Name <input> : "))
