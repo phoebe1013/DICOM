@@ -139,28 +139,40 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
     @:param empty_dcm: meta data folder name
     @:param dcm_folder: dicom slices folder
     """
-    mgz = nib.load(file)
-    factor_x, factor_y, factor_z = mgz.shape
-    datas = mgz.get_data()
-    fileNames = ["IMG%04d.dcm" %x for x in range(1, factor_x+1)]
+    mgzData = nib.load(file)
+    affine = mgzData.affine
+    p = affine[:, 3][0:3]  # for ImagePositionPatient
+    position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
+    factor_x, factor_y, factor_z = mgzData.shape
+    datas = mgzData.get_data()
+    fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
+    sopNums = ["%03d" % x for x in range(1, factor_x + 1)]
 
     for i in range(factor_x):
+        ds = pydicom.dcmread(empty_dcm)
         pixel_array = np.transpose(datas[:, :, i])  # axis = 2
         pixels = pixel_array.astype("int16")
-        ds = pydicom.dcmread(empty_dcm)
-        pixels = pixels.tobytes()
-        ds.PixelData = pixels
+        ds.PixelData = pixels.tobytes()
         ds.Rows = factor_y
         ds.Columns = factor_z
-        name = fileNames[i]
+        ds.PixelSpacing = [1, 1]
+
+        last_index = ds.SOPInstanceUID.rindex(".")
+        preffix = ds.SOPInstanceUID[: last_index + 1]
+        ds.SOPInstanceUID = preffix + sopNums[i]                        # change SOP Instance UID
+        ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
+        ds.InstanceNumber = i + 1                                       # change Instance Number
+        ds.file_meta.TransferSyntaxUID = "Implicit VR Little Endian"
+
+        # change ImagePositionPatient & ImageOrientationPatient
+        ds.ImageOrientationPatient = [affine[0][0] * -1, affine[1][0] * -1, affine[2][0], affine[0][1] * -1,
+                                      affine[1][1] * -1, affine[2][1]]
+        ds.ImagePositionPatient = [position[0], round(position[1] - i, 3), position[2]]
+
         if not os.path.exists(dcm_folder):
             os.makedirs(dcm_folder)
-        path = os.path.join(dcm_folder, name)
+        path = os.path.join(dcm_folder, fileNames[i])
         ds.save_as(path)
-
-
-
-
 
 
 def newDCM():
@@ -250,11 +262,11 @@ if __name__ == "__main__":
             file = str(input("=> Enter file/folder Name <input> : "))
             name = str(input("=> Enter Empty DCM Name <output> (example.dcm): "))
             Edm(file, name)
-        elif(command == "m2d"):
+        elif(command == "m2d_lossless"):
             mgz = str(input("=> Enter MGZ Name <input> (example.mgz): "))
             empty_dcm = str(input("=> Enter Empty DICOM Name <input> (example.dcm): "))
             dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
-            m2d(mgz, empty_dcm, dcm_folder)
+            m2d_lossless(mgz, empty_dcm, dcm_folder)
 
         else:
             print(">>> Error: Invalid input. Try again.")
