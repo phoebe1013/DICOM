@@ -8,6 +8,22 @@ import nibabel as nib
 import operator
 
 
+
+META_DICT = {"studydata" : "StudyDate",
+             "seriesdate" : "SeriesDate",
+             "studydate" : "StudyDate",
+             "studytime" : "StudyTime",
+             "accessionnumber" : "AccessionNumber",
+             "studydescription" : "StudyDescription",
+             "seriesdescription" : "SeriesDescription",
+             "patientname" : "PatientName",
+             "patientid" : "PatientID",
+             "patientbirthdate" : "PatientBirthDate",
+             "patientage" : "PatientAge",
+             "studyid" : "StudyID",
+             "Seriesnumber" : "SeriesNumber"}
+
+
 def sortDCM(dcm_files):
     """
     Sort dicom slices with attribution: Instance Number.
@@ -37,10 +53,11 @@ def ReadData(dcm_folder):
     datas=[]
     for (i, dcm) in enumerate(dcm_files):
         ds = pydicom.dcmread(dcm)
-        data = ds.pixel_array
+        slice = ds.pixel_array
+        data = np.transpose(slice)
         datas.append(data)
-    data = np.array(datas)
-    return data
+    result = np.array(datas)
+    return result
 
 
 
@@ -54,26 +71,27 @@ def d2n_lossless(dcm_folder, nifti, meta_folder):
     @:return 3-D array pixel data (number, resolution, resolution)
     """
     dcm_files = sorted(glob.glob(os.path.join(dcm_folder, "*.dcm")))
-    sliceNum = len(dcm_files)
+    # sliceNum = len(dcm_files)
     for(i, file) in enumerate(dcm_files):
         fileName = os.path.split(file)[1]
-        if not os.path.exists(meta_folder):
-            os.makedirs(meta_folder)
         ds = pydicom.dcmread(file)
+        sliceThickness = ds.SliceThickness      # for nifti's Affine
+        PixelSpacing = ds.PixelSpacing          # for nifti's Affine
         empty = bytes(0)
         ds.PixelData = empty
         ds.Rows = 0
         ds.Columns = 0
+        if not os.path.exists(meta_folder):
+            os.makedirs(meta_folder)
         path = os.path.join(meta_folder, fileName)
         ds.save_as(path)
 
-    resolution = 512                    # Assume the dicom slices are 512 X 512
     data = ReadData(dcm_folder)
     output = nifti
-    factor = sliceNum / resolution      # Adjustment data space
     affine = np.eye(4)
-    affine[1][1] = factor
-    affine[2][2] = factor
+    affine[0][0] = sliceThickness
+    affine[1][1] = PixelSpacing[0]
+    affine[2][2] = PixelSpacing[1]
     img = nib.Nifti1Image(data, affine)
     nib.save(img, output)
 
@@ -90,23 +108,30 @@ def n2d_lossless(nifti, empty_dcm, dcm_folder):
     files = sorted(glob.glob(os.path.join(empty_dcm, "*.dcm")))
     img = nib.load(nifti)
     datas = img.get_data()
+    Affine = img.affine
     dcm_files = sortDCM(files)
 
     for (i, file) in enumerate(dcm_files):
         if not os.path.exists(dcm_folder):
             os.makedirs(dcm_folder)
 
-        resolution = 512                        # Assume the dicom slices are 512 X 512
         fileName = os.path.split(file)[1]
         output = os.path.join(dcm_folder, fileName)
-        slice = datas[i, :, :]                  # vsplit, axis = 0
-        pixel_array = np.reshape(slice, (resolution, resolution))
+        slice = datas[i, :, :]
+        data = np.transpose(slice)
+        rows = data.shape[0]
+        cols = data.shape[1]
+        pixel_array = np.reshape(data, (rows, cols))
 
         ds = pydicom.dcmread(file)              # Write pixel data to dicom
         ds.PixelData = pixel_array.tobytes()
-        ds.Rows = resolution
-        ds.Columns = resolution
+        ds.Rows = rows
+        ds.Columns = cols
+        ds.SliceThickness = Affine[0][0]
+        ds.PixelSpacing = [Affine[1][1], Affine[2][2]]
         ds.save_as(output)
+
+
 
 
 
@@ -175,6 +200,8 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
         ds.save_as(path)
 
 
+
+
 def newDCM():
     """
     Create a new dicom file as template for m2d.
@@ -199,7 +226,6 @@ def newDCM():
     ds.is_implicit_VR = True
 
     ds.PixelData = bytes(0)
-
     ds.Rows = 256
     ds.Columns = 256
     ds.SamplesPerPixel = 1
@@ -211,10 +237,7 @@ def newDCM():
     ds.PixelRepresentation = 1
 
     ds.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
-
     return ds
-
-
 
 
 
@@ -235,8 +258,6 @@ def m2d(mgz, dcm_folder):
             os.makedirs(dcm_folder)
         path = os.path.join(dcm_folder, name)
         ds.save_as(path)
-
-
 
 
 
