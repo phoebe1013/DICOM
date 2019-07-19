@@ -6,22 +6,9 @@ import numpy as np
 import sys
 import nibabel as nib
 import operator
+import datetime
 
 
-
-META_DICT = {"studydata" : "StudyDate",
-             "seriesdate" : "SeriesDate",
-             "studydate" : "StudyDate",
-             "studytime" : "StudyTime",
-             "accessionnumber" : "AccessionNumber",
-             "studydescription" : "StudyDescription",
-             "seriesdescription" : "SeriesDescription",
-             "patientname" : "PatientName",
-             "patientid" : "PatientID",
-             "patientbirthdate" : "PatientBirthDate",
-             "patientage" : "PatientAge",
-             "studyid" : "StudyID",
-             "Seriesnumber" : "SeriesNumber"}
 
 
 def sortDCM(dcm_files):
@@ -40,6 +27,8 @@ def sortDCM(dcm_files):
     for i in sortDic:
         dcm_files.append(i[0])
     return dcm_files
+
+
 
 
 def ReadData(dcm_folder):
@@ -71,7 +60,6 @@ def d2n_lossless(dcm_folder, nifti, meta_folder):
     @:return 3-D array pixel data (number, resolution, resolution)
     """
     dcm_files = sorted(glob.glob(os.path.join(dcm_folder, "*.dcm")))
-    # sliceNum = len(dcm_files)
     for(i, file) in enumerate(dcm_files):
         fileName = os.path.split(file)[1]
         ds = pydicom.dcmread(file)
@@ -166,7 +154,7 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
     """
     mgzData = nib.load(file)
     affine = mgzData.affine
-    p = affine[:, 3][0:3]  # for ImagePositionPatient
+    p = affine[:, 3][0:3]             # for ImagePositionPatient
     position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
     factor_x, factor_y, factor_z = mgzData.shape
     datas = mgzData.get_data()
@@ -202,32 +190,31 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
 
 
 
-def newDCM():
+def newDCM(meta_file, shape):
     """
     Create a new dicom file as template for m2d.
     This dicom file has no pixel data. Pixel data will be filled in m2d method.
+    @:param meta_file: provide meta data
+    @:param shape: mgz data shape
     @:return dataset of dicom file, which could be filled pixel data from mgz file
     """
-    fileName = "template0529.dcm"
+
+    fileName = "template.dcm"
+    prefix = "1.2.826.0.1.3680043.10.271."
+    date = str(datetime.datetime.today())[:10].replace('-', '')  # for Series Instance UID
 
     file_meta = Dataset()
-    file_meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.2'
-    file_meta.MediaStorageSOPInstanceUID = "1.2.3"
-    file_meta.ImplementationClassUID = "1.2.3.4"
-
+    file_meta.MediaStorageSOPClassUID = "CT Image Storage"
     ds = FileDataset(fileName, {},
                      file_meta=file_meta, preamble=b"\0" * 128)
-
-    ds.PatientName = "BirmingHamUAB"
-    ds.PatientID = "123456789"
+    ds.SeriesInstanceUID = prefix + date  # change Series Instance UID
 
     # Set the transfer syntax
     ds.is_little_endian = True
     ds.is_implicit_VR = True
-
     ds.PixelData = bytes(0)
-    ds.Rows = 256
-    ds.Columns = 256
+    ds.Rows = shape[0]
+    ds.Columns = shape[1]
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
     ds.PixelSpacing = [1, 1]
@@ -235,28 +222,78 @@ def newDCM():
     ds.BitsStored = 16
     ds.HighBit = 15
     ds.PixelRepresentation = 1
-
     ds.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+
+    with open(meta_file) as f:
+        for line in f:
+            index = line.rindex(":")
+            key = line[: index].replace(' ', '').lower()
+            value = line[index + 1:].strip()
+            if (key == "studydate"):
+                ds.StudyDate = value
+            if (key == "seriesdate"):
+                ds.SeriesDate = value
+            if (key == "studydate"):
+                ds.StudyDate = value
+            if (key == "studytime"):
+                ds.StudyTime = value
+            if (key == "accessionnumber"):
+                ds.AccessionNumber = value
+            if (key == "studydescription"):
+                ds.StudyDescription = value
+            if (key == "seriesdescription"):
+                ds.SeriesDescription = value
+            if (key == "patientname"):
+                ds.PatientName = value
+            if (key == "patientid"):
+                ds.PatientID = value
+            if (key == "seriesnumber"):
+                ds.SeriesNumber = value
+
     return ds
 
 
 
 
-def m2d(mgz, dcm_folder):
+def m2d(mgz, meta_file, dcm_folder):
+    """
+    Read pixel data of the mgz file then write it to an new dicom.
+    Meanwhile, write the meta data provided by user to the dicom.
+    @:param mgz: mgz file name
+    @:param meta_file: meta data folder name
+    @:param dcm_folder: dicom slices folder
+    """
     mgzData = nib.load(mgz)
+    affine = mgzData.affine
+    shape = mgzData.shape
+    p = affine[:, 3][0:3]  # for ImagePositionPatient
+    position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
+    preffix = "1.2.826.0.1.3680043.10.271."
     factor_x, factor_y, factor_z = mgzData.shape
     datas = mgzData.get_data()
     fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
+    sopNums = ["%03d" % x for x in range(1, factor_x + 1)]
 
+    ds = newDCM(meta_file, shape)
     for i in range(factor_x):
         pixel_array = np.transpose(datas[:, :, i])  # axis = 2
         pixels = pixel_array.astype("int16")
-        ds = newDCM()
         ds.PixelData = pixels.tobytes()
-        name = fileNames[i]
+        ds.Rows = factor_y
+        ds.Columns = factor_z
+        ds.PixelSpacing = [1, 1]
+        ds.SOPInstanceUID = preffix + sopNums[i]                        # change SOP Instance UID
+        ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
+        ds.InstanceNumber = i + 1  # change Instance Number
+
+        # change ImagePositionPatient & ImageOrientationPatient
+        ds.ImageOrientationPatient = [affine[0][0] * -1, affine[1][0] * -1, affine[2][0], affine[0][1] * -1,
+                                      affine[1][1] * -1, affine[2][1]]
+        ds.ImagePositionPatient = [position[0], round(position[1] - i, 3), position[2]]
+
         if not os.path.exists(dcm_folder):
             os.makedirs(dcm_folder)
-        path = os.path.join(dcm_folder, name)
+        path = os.path.join(dcm_folder, fileNames[i])
         ds.save_as(path)
 
 
@@ -288,6 +325,12 @@ if __name__ == "__main__":
             empty_dcm = str(input("=> Enter Empty DICOM Name <input> (example.dcm): "))
             dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
             m2d_lossless(mgz, empty_dcm, dcm_folder)
+
+        elif (command == "m2d"):
+            mgz = str(input("=> Enter MGZ Name <input> (example.mgz): "))
+            meta_file = str(input("=> Enter Meta Data File's Name <input> (example.txt): "))
+            dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
+            m2d(mgz, meta_file, dcm_folder)
 
         else:
             print(">>> Error: Invalid input. Try again.")
