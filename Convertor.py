@@ -171,8 +171,8 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
         ds.PixelSpacing = [1, 1]
 
         last_index = ds.SOPInstanceUID.rindex(".")
-        preffix = ds.SOPInstanceUID[: last_index + 1]
-        ds.SOPInstanceUID = preffix + sopNums[i]                        # change SOP Instance UID
+        prefix = ds.SOPInstanceUID[: last_index + 1]
+        ds.SOPInstanceUID = prefix + sopNums[i]                        # change SOP Instance UID
         ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
         ds.InstanceNumber = i + 1                                       # change Instance Number
         ds.file_meta.TransferSyntaxUID = "Implicit VR Little Endian"
@@ -233,8 +233,8 @@ def newDCM(meta_file, shape):
                 ds.StudyDate = value
             if (key == "seriesdate"):
                 ds.SeriesDate = value
-            if (key == "studydate"):
-                ds.StudyDate = value
+            if (key == "patientbirthdate"):
+                ds.patientbirthdate = value
             if (key == "studytime"):
                 ds.StudyTime = value
             if (key == "accessionnumber"):
@@ -268,7 +268,7 @@ def m2d(mgz, meta_file, dcm_folder):
     shape = mgzData.shape
     p = affine[:, 3][0:3]  # for ImagePositionPatient
     position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
-    preffix = "1.2.826.0.1.3680043.10.271."
+    prefix = "1.2.826.0.1.3680043.10.271."
     factor_x, factor_y, factor_z = mgzData.shape
     datas = mgzData.get_data()
     fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
@@ -282,7 +282,7 @@ def m2d(mgz, meta_file, dcm_folder):
         ds.Rows = factor_y
         ds.Columns = factor_z
         ds.PixelSpacing = [1, 1]
-        ds.SOPInstanceUID = preffix + sopNums[i]                        # change SOP Instance UID
+        ds.SOPInstanceUID = prefix + sopNums[i]                        # change SOP Instance UID
         ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
         ds.InstanceNumber = i + 1  # change Instance Number
 
