@@ -117,6 +117,7 @@ def n2d_lossless(nifti, empty_dcm, dcm_folder):
         ds.Columns = cols
         ds.SliceThickness = Affine[0][0]
         ds.PixelSpacing = [Affine[1][1], Affine[2][2]]
+        ds.SeriesDescription = "_n2d"
         ds.save_as(output)
 
 
