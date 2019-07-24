@@ -7,6 +7,7 @@ import sys
 import nibabel as nib
 import operator
 import datetime
+import time
 
 
 
@@ -203,12 +204,13 @@ def newDCM(meta_file, shape):
     fileName = "template.dcm"
     prefix = "1.2.826.0.1.3680043.10.271."
     date = str(datetime.datetime.today())[:10].replace('-', '')  # for Series Instance UID
+    suffix = str(datetime.datetime.today())[:10].replace('-', '') + str(time.time()).replace('.', '')
 
     file_meta = Dataset()
     file_meta.MediaStorageSOPClassUID = "CT Image Storage"
     ds = FileDataset(fileName, {},
                      file_meta=file_meta, preamble=b"\0" * 128)
-    ds.SeriesInstanceUID = prefix + date  # change Series Instance UID
+    ds.SeriesInstanceUID = prefix + suffix  # change Series Instance UID
 
     # Set the transfer syntax
     ds.is_little_endian = True
