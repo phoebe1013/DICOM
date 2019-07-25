@@ -178,6 +178,7 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
         ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
         ds.InstanceNumber = i + 1                                       # change Instance Number
         ds.file_meta.TransferSyntaxUID = "Implicit VR Little Endian"
+        ds.SeriesDescription = "_m2d_lossless"
 
         # change ImagePositionPatient & ImageOrientationPatient
         ds.ImageOrientationPatient = [affine[0][0] * -1, affine[1][0] * -1, affine[2][0], affine[0][1] * -1,
@@ -219,6 +220,7 @@ def newDCM(meta_file, shape):
     ds.Columns = shape[1]
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
+    ds.SeriesDescription = "_m2d"
     ds.PixelSpacing = [1, 1]
     ds.BitsAllocated = 16
     ds.BitsStored = 16
