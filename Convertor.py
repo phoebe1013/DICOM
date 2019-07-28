@@ -127,7 +127,7 @@ def n2d_lossless(nifti, empty_dcm, dcm_folder):
 
 def Edm(input, empty_Name):
     """
-    Read single DICOM file, empty its pixel data but only keep metadata.
+    Read single DICOM file, write the meta data to a new dicom file as template for m2d_lossless().
     If input is a DICOM folder, then only use the first DICOM file.
     @:param input: a single dicom slice or a folder
     @:param empty_Name: the empty dicom name
@@ -137,11 +137,59 @@ def Edm(input, empty_Name):
     else:
         files = sorted(glob.glob(os.path.join(input, "*.dcm")))
         file = sortDCM(files)[0]
-    ds = pydicom.dcmread(file)
-    empty = bytes(0)
-    ds.PixelData = empty
+
+    dataSet = pydicom.dcmread(file)
+
+    fileName = "Edm.dcm"
+    file_meta = Dataset()
+
+    # add file meta data
+    file_meta.MediaStorageSOPClassUID = "CT Image Storage"
+    file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+    file_meta.FileMetaInformationVersion = dataSet.file_meta.FileMetaInformationVersion
+    file_meta.MediaStorageSOPInstanceUID = dataSet.file_meta.MediaStorageSOPInstanceUID
+    file_meta.ImplementationClassUID = dataSet.file_meta.ImplementationClassUID
+    file_meta.ImplementationVersionName = dataSet.file_meta.ImplementationVersionName
+    ds = FileDataset(fileName, {},
+                     file_meta=file_meta, preamble=b"\0" * 128)
+
+    # add meta data
+    ds.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
+    ds.SOPClassUID = "CT Image Storage"
+    ds.SOPInstanceUID = dataSet.SOPInstanceUID
+    ds.StudyDate = dataSet.StudyDate
+    ds.StudyTime = dataSet.StudyTime
+    ds.AccessionNumber = dataSet.AccessionNumber
+    ds.Modality = 'CT'
+    ds.Manufacturer = dataSet.Manufacturer
+    ds.StudyDescription = dataSet.StudyDescription
+    ds.SeriesDescription = dataSet.SeriesDescription
+    ds.ManufacturerModelName = dataSet.ManufacturerModelName
+    ds.PatientName = dataSet.PatientName
+    ds.PatientID = dataSet.PatientID
+    ds.PatientBirthDate = dataSet.PatientBirthDate
+    ds.PatientSex = dataSet.PatientSex
+    ds.SliceThickness = dataSet.SliceThickness
+    ds.PatientPosition = dataSet.PatientPosition
+    ds.StudyInstanceUID = dataSet.StudyInstanceUID
+    ds.SeriesInstanceUID = dataSet.SeriesInstanceUID
+    ds.StudyID = dataSet.StudyID
+    ds.SeriesNumber = dataSet.SeriesNumber
+    ds.InstanceNumber = "1"
+    ds.ImagePositionPatient = dataSet.ImagePositionPatient
+    ds.ImageOrientationPatient = dataSet.ImageOrientationPatient
+    ds.FrameOfReferenceUID = dataSet.FrameOfReferenceUID
+    ds.PositionReferenceIndicator = dataSet.PositionReferenceIndicator
+    ds.SamplesPerPixel = dataSet.SamplesPerPixel
+    ds.PhotometricInterpretation = "MONOCHROME2"
     ds.Rows = 0
     ds.Columns = 0
+    ds.PixelSpacing = dataSet.PixelSpacing
+    ds.BitsAllocated = dataSet.BitsAllocated
+    ds.BitsStored = dataSet.BitsStored
+    ds.HighBit = dataSet.HighBit
+    ds.PixelRepresentation = dataSet.PixelRepresentation
+    ds.PixelData = bytes(0)
     ds.save_as(empty_Name)
 
 
@@ -339,7 +387,7 @@ if __name__ == "__main__":
         else:
             print(">>> Error: Invalid input. Try again.")
 
-        print("==> What you want? d2n/n2d/edm/m2d or exit?")
+        print("==> Enter: d2n, n2d, edm, m2d_lossless, m2d or exit? ")
         command = input()
 
     sys.exit()
