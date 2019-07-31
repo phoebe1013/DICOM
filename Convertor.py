@@ -144,7 +144,9 @@ def Edm(input, empty_Name):
     file_meta = Dataset()
 
     # add file meta data
-    file_meta.MediaStorageSOPClassUID = "CT Image Storage"
+    # file_meta.MediaStorageSOPClassUID = "CT Image Storage"
+    file_meta.MediaStorageSOPClassUID = dataSet.file_meta.MediaStorageSOPClassUID
+
     file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
     file_meta.FileMetaInformationVersion = dataSet.file_meta.FileMetaInformationVersion
     file_meta.MediaStorageSOPInstanceUID = dataSet.file_meta.MediaStorageSOPInstanceUID
@@ -154,13 +156,17 @@ def Edm(input, empty_Name):
                      file_meta=file_meta, preamble=b"\0" * 128)
 
     # add meta data
-    ds.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
-    ds.SOPClassUID = "CT Image Storage"
+    # ds.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
+    ds.ImageType = dataSet.ImageType
+
+    # ds.SOPClassUID = "CT Image Storage"
+    ds.SOPClassUID = dataSet.SOPClassUID
     ds.SOPInstanceUID = dataSet.SOPInstanceUID
     ds.StudyDate = dataSet.StudyDate
     ds.StudyTime = dataSet.StudyTime
     ds.AccessionNumber = dataSet.AccessionNumber
-    ds.Modality = 'CT'
+    # ds.Modality = 'CT'
+    # ds.Modality = dataSet.Modality            # changed to CT auto
     ds.Manufacturer = dataSet.Manufacturer
     ds.StudyDescription = dataSet.StudyDescription
     ds.SeriesDescription = dataSet.SeriesDescription
@@ -180,6 +186,7 @@ def Edm(input, empty_Name):
     ds.ImageOrientationPatient = dataSet.ImageOrientationPatient
     ds.FrameOfReferenceUID = dataSet.FrameOfReferenceUID
     ds.PositionReferenceIndicator = dataSet.PositionReferenceIndicator
+    ds.PositionReferenceIndicator = "SN"
     ds.SamplesPerPixel = dataSet.SamplesPerPixel
     ds.PhotometricInterpretation = "MONOCHROME2"
     ds.Rows = 0
@@ -225,7 +232,6 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
         ds.SOPInstanceUID = prefix + sopNums[i]                        # change SOP Instance UID
         ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
         ds.InstanceNumber = i + 1                                       # change Instance Number
-        ds.file_meta.TransferSyntaxUID = "Implicit VR Little Endian"
         ds.SeriesDescription = "_m2d_lossless"
 
         # change ImagePositionPatient & ImageOrientationPatient
@@ -255,10 +261,12 @@ def newDCM(meta_file, shape):
     suffix = str(datetime.datetime.today())[:10].replace('-', '') + str(time.time()).replace('.', '')
 
     file_meta = Dataset()
-    file_meta.MediaStorageSOPClassUID = "CT Image Storage"
+    # file_meta.MediaStorageSOPClassUID = "CT Image Storage"
     ds = FileDataset(fileName, {},
                      file_meta=file_meta, preamble=b"\0" * 128)
     ds.SeriesInstanceUID = prefix + suffix  # change Series Instance UID
+
+    # ds.ImageType = ['ORIGINAL', 'PRIMARY', 'OTHER']
 
     # Set the transfer syntax
     ds.is_little_endian = True
