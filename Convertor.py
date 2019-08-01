@@ -260,13 +260,23 @@ def newDCM(meta_file, shape):
     prefix = "1.2.826.0.1.3680043.10.271."
     suffix = str(datetime.datetime.today())[:10].replace('-', '') + str(time.time()).replace('.', '')
 
+
     file_meta = Dataset()
-    # file_meta.MediaStorageSOPClassUID = "CT Image Storage"
+    file_meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.4"
+    # file_meta.MediaStorageSOPClassUID = prefix + str(datetime.datetime.today())[:10].replace('-', '')
+    # file_meta.MediaStorageSOPClassUID = prefix[:-1]
+
     ds = FileDataset(fileName, {},
                      file_meta=file_meta, preamble=b"\0" * 128)
     ds.SeriesInstanceUID = prefix + suffix  # change Series Instance UID
 
-    # ds.ImageType = ['ORIGINAL', 'PRIMARY', 'OTHER']
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.4"
+    ds.ImageType = ['ORIGINAL', 'PRIMARY', 'OTHER']
+    ds.PatientPosition = "HFS"
+    ds.Manufacturer =  "GE MEDICAL SYSTEMS"
+    ds.ManufacturerModelName = "SIGNA EXCITE"
+    ds.PositionReferenceIndicator = "SN"
+    ds.SliceThickness = 1
 
     # Set the transfer syntax
     ds.is_little_endian = True
@@ -294,7 +304,7 @@ def newDCM(meta_file, shape):
             if (key == "seriesdate"):
                 ds.SeriesDate = value
             if (key == "patientbirthdate"):
-                ds.patientbirthdate = value
+                ds.PatientBirthDate = value
             if (key == "studytime"):
                 ds.StudyTime = value
             if (key == "accessionnumber"):
@@ -309,6 +319,8 @@ def newDCM(meta_file, shape):
                 ds.PatientID = value
             if (key == "seriesnumber"):
                 ds.SeriesNumber = value
+            if (key == "patientsex"):
+                ds.PatientSex = value;
 
     return ds
 
