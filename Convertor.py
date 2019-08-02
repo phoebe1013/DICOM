@@ -132,6 +132,7 @@ def Edm(input, empty_Name):
     @:param input: a single dicom slice or a folder
     @:param empty_Name: the empty dicom name
     """
+    start = time.time()
     if(os.path.isfile(input)):
         file = input
     else:
@@ -144,7 +145,6 @@ def Edm(input, empty_Name):
     file_meta = Dataset()
 
     # add file meta data
-    # file_meta.MediaStorageSOPClassUID = "CT Image Storage"
     file_meta.MediaStorageSOPClassUID = dataSet.file_meta.MediaStorageSOPClassUID
 
     file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
@@ -156,17 +156,12 @@ def Edm(input, empty_Name):
                      file_meta=file_meta, preamble=b"\0" * 128)
 
     # add meta data
-    # ds.ImageType = ['ORIGINAL', 'PRIMARY', 'AXIAL']
     ds.ImageType = dataSet.ImageType
-
-    # ds.SOPClassUID = "CT Image Storage"
     ds.SOPClassUID = dataSet.SOPClassUID
     ds.SOPInstanceUID = dataSet.SOPInstanceUID
     ds.StudyDate = dataSet.StudyDate
     ds.StudyTime = dataSet.StudyTime
     ds.AccessionNumber = dataSet.AccessionNumber
-    # ds.Modality = 'CT'
-    # ds.Modality = dataSet.Modality            # changed to CT auto
     ds.Manufacturer = dataSet.Manufacturer
     ds.StudyDescription = dataSet.StudyDescription
     ds.SeriesDescription = dataSet.SeriesDescription
@@ -199,6 +194,8 @@ def Edm(input, empty_Name):
     ds.PixelData = bytes(0)
     ds.save_as(empty_Name)
 
+    print("Cost time (seconds): " , (time.time() - start))
+
 
 
 
@@ -209,6 +206,7 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
     @:param empty_dcm: meta data folder name
     @:param dcm_folder: dicom slices folder
     """
+    start = time.time()
     mgzData = nib.load(file)
     affine = mgzData.affine
     p = affine[:, 3][0:3]             # for ImagePositionPatient
@@ -244,6 +242,8 @@ def m2d_lossless(file, empty_dcm, dcm_folder):
         path = os.path.join(dcm_folder, fileNames[i])
         ds.save_as(path)
 
+    print("Cost time (seconds): " , (time.time() - start))
+
 
 
 
@@ -262,15 +262,12 @@ def newDCM(meta_file, shape):
 
 
     file_meta = Dataset()
-    file_meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.4"
-    # file_meta.MediaStorageSOPClassUID = prefix + str(datetime.datetime.today())[:10].replace('-', '')
-    # file_meta.MediaStorageSOPClassUID = prefix[:-1]
-
+    file_meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.4"  # Standard SOP CLasses: MR Image Storage
     ds = FileDataset(fileName, {},
                      file_meta=file_meta, preamble=b"\0" * 128)
     ds.SeriesInstanceUID = prefix + suffix  # change Series Instance UID
 
-    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.4"
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.4"            # Standard SOP CLasses: MR Image Storage
     ds.ImageType = ['ORIGINAL', 'PRIMARY', 'OTHER']
     ds.PatientPosition = "HFS"
     ds.Manufacturer =  "GE MEDICAL SYSTEMS"
@@ -335,6 +332,8 @@ def m2d(mgz, meta_file, dcm_folder):
     @:param meta_file: meta data folder name
     @:param dcm_folder: dicom slices folder
     """
+
+    start = time.time()
     mgzData = nib.load(mgz)
     affine = mgzData.affine
     shape = mgzData.shape
@@ -368,6 +367,7 @@ def m2d(mgz, meta_file, dcm_folder):
         path = os.path.join(dcm_folder, fileNames[i])
         ds.save_as(path)
 
+    print("Cost time (seconds): ", (time.time() - start))
 
 
 
