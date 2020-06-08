@@ -15,9 +15,10 @@ import time
 def sortDCM(dcm_files):
     """
     Sort dicom slices with attribution: Instance Number.
-    @:param dcm_files: dicom slices that need to be sorted
-    @:return sorted dicom slices
+    :param dcm_files: dicom slices that need to be sorted
+    :return: sorted dicom slices
     """
+
     datadic = {}
     for (i, file) in enumerate(dcm_files):
         ds = pydicom.dcmread(file)
@@ -35,9 +36,10 @@ def sortDCM(dcm_files):
 def ReadData(dcm_folder):
     """
     Read all pixel data of dicom slices from a folder.
-    @:param dcm_folder: dicom folder name
-    @:return 3-D array pixel data with shape (number, resolution, resolution)
+    :param dcm_folder: dicom folder name
+    :return: 3-D array pixel data with shape (number, resolution, resolution)
     """
+
     files = sorted(glob.glob(os.path.join(dcm_folder, "*.dcm")))
     dcm_files = sortDCM(files)
     datas=[]
@@ -54,12 +56,12 @@ def ReadData(dcm_folder):
 
 def d2n_lossless(dcm_folder, nifti, meta_folder):
     """
-    Convert dicom files to nifti format, and empty pixel data of dicom slices.
-    @:param dcm_folder: dicom folder name
-    @:param nifti: nifti name
-    @:param meta_folder: the meta data folder name
-    @:return 3-D array pixel data (number, resolution, resolution)
+    Convert dicom files to nifti format, empty pixel data of original dicom slices and save them to meta_folder.
+    :param dcm_folder: dicom folder name
+    :param nifti: nifti file name
+    :param meta_folder: the meta data folder name
     """
+
     dcm_files = sorted(glob.glob(os.path.join(dcm_folder, "*.dcm")))
     for(i, file) in enumerate(dcm_files):
         fileName = os.path.split(file)[1]
@@ -89,11 +91,12 @@ def d2n_lossless(dcm_folder, nifti, meta_folder):
 
 def n2d_lossless(nifti, empty_dcm, dcm_folder):
     """
-    Convert nifti file to dicom files. Read nifti pixel data and write it to empty dicom slices.
-    @:param nifti: nifti file name
-    @:param empty_dcm: the meta data folder
-    @:param dcm_folder: dicom slices folder
+    Convert nifti file to dicom files. Read nifti pixel data and write it in empty dicom slices.
+    :param nifti: nifti file name
+    :param empty_dcm: the meta data folder
+    :param dcm_folder: dicom slices folder
     """
+
     files = sorted(glob.glob(os.path.join(empty_dcm, "*.dcm")))
     img = nib.load(nifti)
     datas = img.get_data()
@@ -129,8 +132,8 @@ def Edm(input, empty_Name):
     """
     Read single DICOM file, write the meta data to a new dicom file as template for m2d_lossless().
     If input is a DICOM folder, then only use the first DICOM file.
-    @:param input: a single dicom slice or a folder
-    @:param empty_Name: the empty dicom name
+    :param input: a single dicom slice or a folder
+    :param empty_Name: the empty dicom name
     """
     start = time.time()
     if(os.path.isfile(input)):
@@ -199,13 +202,58 @@ def Edm(input, empty_Name):
 
 
 
+def n2d_edm(nifti, meta_file, dcm_folder):
+    """
+    Convert nifit file to dicom slices with an template dicom file.
+    :param nifti: nifti file name
+    :param meta_file: the template file
+    :param dcm_folder: the result dicom folder name
+    """
+    niftiData = nib.load(nifti)
+    affine = niftiData.affine
+    p = affine[:, 3][0:3]             # for ImagePositionPatient
+    position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
+    factor_x, factor_y, factor_z = niftiData.shape
+    datas = niftiData.get_data()         # (166, 256, 256)
+    fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
+    sopNums = ["%03d" % x for x in range(1, factor_x + 1)]
+
+    for i in range(factor_x):
+        ds = pydicom.dcmread(meta_file)
+        pixel_array = np.transpose(datas[i, :, :])
+        ds.PixelData = pixel_array.tobytes()
+        ds.Rows = factor_y
+        ds.Columns = factor_z
+        ds.PixelSpacing = [1, 1]
+
+        last_index = ds.SOPInstanceUID.rindex(".")
+        prefix = ds.SOPInstanceUID[: last_index + 1]
+        ds.SOPInstanceUID = prefix + sopNums[i]                        # change SOP Instance UID
+        ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID     # change Media Storage SOP Instance UID
+        ds.InstanceNumber = i + 1                                       # change Instance Number
+        ds.SeriesDescription = "_m2d_edm"
+
+        # change ImagePositionPatient & ImageOrientationPatient
+        ds.ImageOrientationPatient = [affine[0][0] * -1, affine[1][0] * -1, affine[2][0], affine[0][1] * -1,
+                                      affine[1][1] * -1, affine[2][1]]
+        ds.ImagePositionPatient = [position[0], round(position[1] - i, 3), position[2]]
+
+        if not os.path.exists(dcm_folder):
+            os.makedirs(dcm_folder)
+        path = os.path.join(dcm_folder, fileNames[i])
+        ds.save_as(path)
+
+
+
+
 def m2d_lossless(file, empty_dcm, dcm_folder):
     """
     Read pixel data of the mgz file then write it to empty dicom file from Edm.
-    @:param file: mgz file name
-    @:param empty_dcm: meta data folder name
-    @:param dcm_folder: dicom slices folder
+    :param file: mgz file name
+    :param empty_dcm: meta data folder name
+    :param dcm_folder: dicom slices folder
     """
+
     start = time.time()
     mgzData = nib.load(file)
     affine = mgzData.affine
@@ -251,9 +299,9 @@ def newDCM(meta_file, shape):
     """
     Create a new dicom file as template for m2d.
     This dicom file has no pixel data. Pixel data will be filled in m2d method.
-    @:param meta_file: provide meta data
-    @:param shape: mgz data shape
-    @:return dataset of dicom file, which could be filled pixel data from mgz file
+    :param meta_file: provide meta data
+    :param shape: mgz data shape
+    :return: the dataset of dicom file, which could be filled pixel data from mgz file
     """
 
     fileName = "template.dcm"
@@ -328,9 +376,9 @@ def m2d(mgz, meta_file, dcm_folder):
     """
     Read pixel data of the mgz file then write it to an new dicom.
     Meanwhile, write the meta data provided by user to the dicom.
-    @:param mgz: mgz file name
-    @:param meta_file: meta data folder name
-    @:param dcm_folder: dicom slices folder
+    :param mgz: mgz file name
+    :param meta_file: meta data folder name
+    :param dcm_folder: dicom slices folder
     """
 
     start = time.time()
@@ -371,43 +419,54 @@ def m2d(mgz, meta_file, dcm_folder):
 
 
 
+def checkArgs():
+    """
+    Print prompts and check if inputs are valid.
+    :return: return "exit" if this is included in users' input, otherwise, return String command.
+    """
+    print("\n===> Enter the Function Number and Parameters:")
+    print(" => 1. d2n_lossless(dcm_folder, nifti, meta_folder)")
+    print(" => 2. n2d_lossless(nifti, empty_dcm, dcm_folder)")
+    print(" => 3. n2d_edm(nifti, meta_file, dcm_folder)")
+    print(" => 4. n2d(nifti, meta_file, dcm_folder)")   #TODO
+    print(" => 5. m2d_lossless(file, empty_dcm, dcm_folder)")
+    print(" => 6. m2d(mgz, meta_file, dcm_folder)")
+    command = str(input())
+    if "exit" in command:
+        return "exit"
+    return command
+
+
+
+def execute(commands):
+    """
+    Execute functions according to the commands if commands are valid.
+    :param commands: Commands provided from user.
+    """
+    commands = [x.strip() for x in commands.split()]
+    funNum = int(commands[0])
+    argNum = len(commands[1:])
+    # print('func:{}, argNum:{}:{}'.format(functionNum, argNum, command[1:]))
+    if (argNum != 3):
+        return
+
+    if (funNum == 1):
+        d2n_lossless(commands[1], commands[2], commands[3])
+    elif (funNum == 2):
+        n2d_lossless(commands[1], commands[2], commands[3])
+    elif (funNum == 3):
+        n2d_edm(commands[1], commands[2], commands[3])
+    elif (funNum == 4):
+        print("TODO: n2d(nifti, meta_file, dcm_folder)!")
+    elif (funNum == 5):
+        m2d_lossless(commands[1], commands[2], commands[3])
+    else:
+        m2d(commands[1], commands[2], commands[3])
 
 
 if __name__ == "__main__":
-    command = str(input("==> Enter: d2n, n2d, edm, m2d_lossless, m2d or exit? "))
-    while(command != "exit"):
-        if(command == "d2n"):
-            dcm_folder = str(input("=> Enter DICOM Folder Name <input>: "))
-            nifit = str(input("=> Enter Nifti Name <output> (example.nii): "))
-            meta = str(input("=> Enter Meta Folder Name <output>: "))
-            d2n_lossless(dcm_folder, nifit, meta)
-
-        elif(command == "n2d"):
-            nifit = str(input("=> Enter Nifti Name <input> (example.nii): "))
-            meta = str(input("=> Enter Meta Folder Name <input>: "))
-            dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
-            n2d_lossless(nifit, meta, dcm_folder)
-
-        elif(command == "edm"):
-            file = str(input("=> Enter file/folder Name <input> : "))
-            name = str(input("=> Enter Empty DCM Name <output> (example.dcm): "))
-            Edm(file, name)
-        elif(command == "m2d_lossless"):
-            mgz = str(input("=> Enter MGZ Name <input> (example.mgz): "))
-            empty_dcm = str(input("=> Enter Empty DICOM Name <input> (example.dcm): "))
-            dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
-            m2d_lossless(mgz, empty_dcm, dcm_folder)
-
-        elif (command == "m2d"):
-            mgz = str(input("=> Enter MGZ Name <input> (example.mgz): "))
-            meta_file = str(input("=> Enter Meta Data File's Name <input> (example.txt): "))
-            dcm_folder = str(input("=> Enter DICOM Folder Name <output>: "))
-            m2d(mgz, meta_file, dcm_folder)
-
-        else:
-            print(">>> Error: Invalid input. Try again.")
-
-        print("==> Enter: d2n, n2d, edm, m2d_lossless, m2d or exit? ")
-        command = input()
-
+    commands = checkArgs()
+    while (commands != "exit"):
+        execute(commands)
+        commands = checkArgs()
     sys.exit()
