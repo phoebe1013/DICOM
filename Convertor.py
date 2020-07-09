@@ -202,29 +202,32 @@ def Edm(input, empty_Name):
 
 
 
-def n2d_edm(nifti, meta_file, dcm_folder):
+def n2d_edm(nifti, template, dcm_folder):
     """
     Convert nifit file to dicom slices with an template dicom file.
     :param nifti: nifti file name
-    :param meta_file: the template file
+    :param template: the template file
     :param dcm_folder: the result dicom folder name
     """
     niftiData = nib.load(nifti)
     affine = niftiData.affine
     p = affine[:, 3][0:3]             # for ImagePositionPatient
-    position = [round(p[0] * -1, 3), round(p[1] * -1, 3), round(p[2], 3)]
+    position = [p[0], -1 * p[1], -1 * p[2]]
+    sliceThickness = affine[0][2]
+    pixelSpacing = [-1 * affine[1][0], affine[2][1]]
     factor_x, factor_y, factor_z = niftiData.shape
     datas = niftiData.get_data()         # (166, 256, 256)
-    fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_x + 1)]
-    sopNums = ["%03d" % x for x in range(1, factor_x + 1)]
+    fileNames = ["IMG%04d.dcm" % x for x in range(1, factor_z + 1)]
+    sopNums = ["%03d" % x for x in range(1, factor_z + 1)]
 
-    for i in range(factor_x):
-        ds = pydicom.dcmread(meta_file)
-        pixel_array = np.transpose(datas[i, :, :])
+    for i in range(factor_z):
+        ds = pydicom.dcmread(template)
+        pixel_array = np.transpose(datas[:, :, i])
         ds.PixelData = pixel_array.tobytes()
         ds.Rows = factor_y
-        ds.Columns = factor_z
-        ds.PixelSpacing = [1, 1]
+        ds.Columns = factor_x
+        ds.PixelSpacing = pixelSpacing
+        ds.SliceThickness = sliceThickness
 
         last_index = ds.SOPInstanceUID.rindex(".")
         prefix = ds.SOPInstanceUID[: last_index + 1]
@@ -234,15 +237,14 @@ def n2d_edm(nifti, meta_file, dcm_folder):
         ds.SeriesDescription = "_m2d_edm"
 
         # change ImagePositionPatient & ImageOrientationPatient
-        ds.ImageOrientationPatient = [affine[0][0] * -1, affine[1][0] * -1, affine[2][0], affine[0][1] * -1,
-                                      affine[1][1] * -1, affine[2][1]]
-        ds.ImagePositionPatient = [position[0], round(position[1] - i, 3), position[2]]
+        ds.ImageOrientationPatient = [0, 1, 0, 0, 0, -1]
+        ds.ImagePositionPatient = [position[0] + i * sliceThickness, position[1], position[2]]
+        ds.SliceLocation = position[0] + i * sliceThickness
 
         if not os.path.exists(dcm_folder):
             os.makedirs(dcm_folder)
         path = os.path.join(dcm_folder, fileNames[i])
         ds.save_as(path)
-
 
 
 
